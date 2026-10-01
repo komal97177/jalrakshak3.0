@@ -1,0 +1,120 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JalRakshak – Bhagalpur Flood Early Warning</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{--bg:#0f1720;--pn:#17212c;--ln:#2a3948;--tx:#e6edf3;--mu:#8da2b5;--g:#2ea043;--a:#d29922;--r:#f85149;--ac:#58a6ff}
+*{box-sizing:border-box}body{margin:0;font:14px system-ui,sans-serif;background:var(--bg);color:var(--tx);height:100vh;display:flex;flex-direction:column}
+header{display:flex;gap:10px;align-items:center;padding:8px 14px;background:var(--pn);border-bottom:1px solid var(--ln);flex-wrap:wrap}
+h1{font-size:18px;margin:0 8px 0 0}h1 small{color:var(--mu);font-weight:400;font-size:12px}
+.pill{padding:3px 10px;border-radius:99px;background:#223142;font-size:12px}.pill.ok{background:#15361f}.pill.warn{background:#3d2f0c}
+#lvl{font-weight:700;padding:4px 14px}#lvl.GREEN{background:var(--g)}#lvl.AMBER{background:var(--a);color:#000}#lvl.RED{background:var(--r)}
+main{flex:1;display:grid;grid-template-columns:260px 1fr 380px;min-height:0}
+aside{background:var(--pn);padding:12px;overflow:auto;border-right:1px solid var(--ln)}aside.r{border-left:1px solid var(--ln);border-right:0;padding:0}
+#center{display:flex;flex-direction:column;min-width:0}#map{flex:1;min-height:300px}#chart{height:150px;background:var(--pn);border-top:1px solid var(--ln);padding:4px 10px}
+button,select,input,textarea{background:#223142;color:var(--tx);border:1px solid var(--ln);border-radius:6px;padding:6px 10px;font:inherit}
+button{cursor:pointer}button:hover{border-color:var(--ac)}button.p{background:#1f6feb;border-color:#1f6feb}button.on{border-color:var(--ac);background:#1d3a5f}
+textarea,input[type=text],input[type=email]{width:100%}label{display:block;color:var(--mu);font-size:12px;margin:10px 0 4px}
+.row{display:flex;gap:6px;flex-wrap:wrap}.tabs{display:flex;border-bottom:1px solid var(--ln)}.tabs button{flex:1;border:0;border-radius:0;background:transparent;padding:10px 4px}.tabs button.on{border-bottom:2px solid var(--ac)}
+.tab{display:none;padding:12px;overflow:auto;height:calc(100vh - 100px)}.tab.on{display:block}
+.card{background:#1c2936;border:1px solid var(--ln);border-radius:8px;padding:8px 10px;margin:6px 0;font-size:13px}.mu{color:var(--mu);font-size:12px}
+.st{font-size:11px;padding:1px 7px;border-radius:99px}.Verified{background:#15361f;color:#56d364}.Probable{background:#3d2f0c;color:#e3b341}.Unverified{background:#2b2f36}.Rejected{background:#3c1618;color:#ff7b72}
+.banner{background:#3d2f0c;border:1px solid #6b4e0a;border-radius:6px;padding:6px 8px;font-size:12px;margin-bottom:8px}
+#chat{height:230px;overflow:auto;background:#121b24;border-radius:6px;padding:8px}.me{color:var(--ac)}.b{margin:6px 0}
+@media(max-width:900px){main{grid-template-columns:1fr;overflow:auto}body{height:auto}.tab{height:auto}#map{min-height:380px}}
+</style></head><body>
+<header><h1>🌊 JalRakshak <small>Bhagalpur, Bihar · flood early warning</small></h1>
+<span id="lvl" class="pill GREEN">…</span><span id="pWx" class="pill">weather</span><span id="pRv" class="pill">river</span><span id="pAi" class="pill">AI model</span><span id="pMail" class="pill">email</span><span id="pMode" class="pill"></span>
+<span style="flex:1"></span><span id="who" class="mu"></span></header>
+<main>
+<aside>
+<label>Scenario</label><div class="row"><button id="b0" class="on" onclick="preset(0)">Live</button><button id="b1" onclick="preset(1)">Heavy 80 mm</button><button id="b2" onclick="preset(2)">Extreme 200 mm + high river</button></div>
+<label>Rain (mm/day): <b id="rv">live</b></label><input id="rain" type="range" min="0" max="200" value="0" oninput="slider()">
+<label>Ganga level</label><select id="river" onchange="rv_()"><option value="live">Live (GloFAS)</option><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option></select>
+<label>Map layer</label><div class="row"><button id="l0" class="on" onclick="layer('risk')">Risk</button><button id="l1" onclick="layer('vuln')">Risk × people</button></div>
+<label>Start point for evacuation</label><div class="mu">Click the map, or</div><button onclick="gps()" style="margin-top:4px">📍 Use my location</button>
+<label>Hotspots (from real flood records)</label><div id="hot"></div>
+<div class="mu" style="margin-top:12px" id="cens"></div><div class="mu" id="prov"></div>
+</aside>
+<div id="center"><div id="map" style="position:relative"><div id="legend" style="position:absolute;z-index:1000;right:10px;bottom:24px;background:#17212cee;border:1px solid #2a3948;border-radius:8px;padding:8px 10px;font-size:12px"></div></div><div id="chart"></div></div>
+<aside class="r"><div class="tabs"><button class="on" onclick="tab(0)">Brief</button><button onclick="tab(1)">Reports</button><button onclick="tab(2)">Dispatch</button><button onclick="tab(3)">Ask</button><button onclick="tab(4)">Account</button><button onclick="tab(5)">About</button></div>
+<div class="tab on" id="t0"><div class="row"><button onclick="brief('en')">English</button><button onclick="brief('hi')">हिन्दी</button></div><div class="card" id="brief">…</div>
+<b>Evacuation route</b><div id="route" class="card mu">Click the map to choose a start point.</div><b>Alert history</b><div id="alerts"></div></div>
+<div class="tab" id="t1"><textarea id="rtxt" rows="3" placeholder="Report flooding in English / हिन्दी / Hinglish…"></textarea><div class="row" style="margin-top:6px"><button class="p" onclick="sendRep()">Submit report</button><button onclick="sampleRep()">▶ Sample stream</button></div>
+<div class="mu">Reports made in a scenario never count toward live alerts. Only the last 30 min count.</div><div id="reps"></div></div>
+<div class="tab" id="t2"><div class="mu">Admin only (sign in with an admin email).</div><div class="row" style="margin:6px 0"><button class="p" onclick="dispatch()">Run dispatch</button><button onclick="sendAlert()">Send email alert now</button><button onclick="resetRep()">Reset reports</button></div><div id="disp"></div></div>
+<div class="tab" id="t3"><div id="chat"></div><div class="row" style="margin-top:6px"><input id="cin" type="text" style="flex:1" placeholder="Ask: is Sabour safe? / शिविर कहां है?" onkeydown="if(event.key=='Enter')ask()"><button class="p" onclick="ask()">Ask</button></div><div class="mu">Runs on our own intent model + live data only. Max 20 messages/min.</div></div>
+<div class="tab" id="t4"><div id="acct"></div></div>
+<div class="tab" id="t5"><div id="about">…</div></div></aside></main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const col={green:'#2ea043',amber:'#d29922',red:'#f85149'};
+let lay0=0,S=null,scn={rain:null,river:'live'},lay='risk',start=null,ME=null,map,circles=[],overlay=[],startM=null,routeL=null;
+const api=(p,o={})=>fetch('/api'+p,{credentials:'same-origin',headers:{'Content-Type':'application/json'},...o}).then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.detail||r.statusText);return j});
+const q=()=>scn.rain!=null||scn.river!='live'?`rain=${scn.rain??0}&river=${scn.river}&scen=1`:'';
+const qs=x=>x?('?'+x):'';
+map=L.map('map').setView([25.30,87.0],10);L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
+map.on('click',e=>setStart(e.latlng.lat,e.latlng.lng));
+function tab(i){document.querySelectorAll('.tabs button').forEach((b,k)=>b.classList.toggle('on',k==i));document.querySelectorAll('.tab').forEach((t,k)=>t.classList.toggle('on',k==i));if(i==5)about();if(i==4)acct()}
+function preset(i){[0,1,2].forEach(k=>$('b'+k).classList.toggle('on',k==i));scn=i==0?{rain:null,river:'live'}:i==1?{rain:80,river:'normal'}:{rain:200,river:'high'};$('rain').value=scn.rain??0;$('rv').textContent=scn.rain==null?'live':scn.rain;$('river').value=scn.river;refresh()}
+function slider(){scn.rain=+$('rain').value;$('rv').textContent=scn.rain;[0,1,2].forEach(k=>$('b'+k).classList.remove('on'));refresh()}
+function rv_(){scn.river=$('river').value;if(scn.river!='live'&&scn.rain==null)scn.rain=0,$('rv').textContent=0;refresh()}
+function layer(l){lay=l;$('l0').classList.toggle('on',l=='risk');$('l1').classList.toggle('on',l=='vuln');draw()}
+async function refresh(){try{S=await api('/state'+qs(q()));draw();chart();hdr();brief(ME?.lang||'en');if(start)route();reps()}catch(e){$('brief').textContent='Error: '+e.message}}
+function hdr(){const l=$('lvl');l.textContent='ALERT: '+S.level;l.className='pill '+S.level;
+$('pWx').textContent=S.live_weather?'weather live':'weather: scenario/offline';$('pWx').className='pill '+(S.live_weather?'ok':'warn');
+$('pRv').textContent='river '+S.river_index+(S.river_live?'':' (default)');$('pRv').className='pill '+(S.river_live?'ok':'warn');
+$('pMode').textContent=S.mode=='scenario'?'SCENARIO – map shows worst hour':'LIVE';$('pMode').className='pill '+(S.mode=='scenario'?'warn':'ok');
+$('cens').textContent='Exposure: '+S.census_source;const pv=S.blocks.filter(b=>!b.verified).length;$('prov').innerHTML=pv?`⚠ ${pv} block names are provisional until the census PCA file is loaded (scripts/prep_census.py).`:'';
+$('hot').innerHTML=S.hotspots.map(h=>`<div class="card">${esc(h.name)} <span class="mu">flooded ≥10% in ${Math.round(h.flood_freq*100)}% of records, peak ${h.peak_inundation_pct}%</span></div>`).join('')}
+const VER={green:['SAFE for now','No immediate danger – keep watching alerts'],amber:['CAUTION','Flooding possible – be ready, keep essentials on high ground'],red:['DANGEROUS','Flooding likely – move to higher ground / relief camp']};
+function draw(){if(!S)return;$('legend').innerHTML=lay=='risk'?'<b>Flood risk</b><br><span style="color:#2ea043">●</span> Safe (&lt;45%)<br><span style="color:#d29922">●</span> Caution (45–75%)<br><span style="color:#f85149">●</span> Dangerous (&gt;75%)':'<b>Priority = risk × people</b><br><span style="color:#2ea043">●</span> Low &nbsp;<span style="color:#d29922">●</span> Medium &nbsp;<span style="color:#f85149">●</span> High<br><span class="mu">Circle size = population. Not the same as danger – use the Risk layer for safe/dangerous.</span>';circles.concat(overlay).forEach(c=>map.removeLayer(c));circles=[];overlay=[];
+const mx=Math.max(...S.blocks.map(b=>b.vuln),.001);
+S.blocks.forEach(b=>{const v=lay=='risk'?b.risk:b.vuln/mx;const c=v>.75?col.red:v>.45?col.amber:col.green;
+const m=L.circle([b.lat,b.lon],{radius:5000+9000*(lay=='vuln'?b.exposure:.5),color:c,fillColor:c,fillOpacity:.25+.4*v,weight:2}).addTo(map);
+m.bindPopup(`<b>${esc(b.name)}</b> / ${esc(b.name_hi)}${b.verified?'':' <i>(name provisional)</i>'}<br><b style="color:${col[b.level]}">${VER[b.level][0]}</b> – ${VER[b.level][1]}<br>Flood risk <b>${Math.round(b.risk*100)}%</b> · priority ${Math.round(b.vuln/mx*100)}/100 · people (2011) ${b.pop.toLocaleString()}<br>Rain 24h ${b.rain24} mm · 3h ${b.rain3} mm<br>Seasonal susceptibility ${Math.round(b.susceptibility*100)}% · expected inundation ${b.exp_inundation_pct}% of area`);circles.push(m)});
+S.shelters.forEach(s=>overlay.push(L.marker([s.lat,s.lon],{title:s.name}).addTo(map).bindPopup(`🏫 ${esc(s.name)}<br>Capacity ${s.capacity} <i>(placeholder)</i>`)))}
+function chart(){const W=$('chart').clientWidth-20,H=130,n=S.series.length,bw=W/n,mr=Math.max(...S.series.map(s=>s.rain),1);
+let g=`<svg width="${W}" height="${H+16}"><text x="0" y="10" fill="#8da2b5" font-size="11">24h forecast: rain (bars, mm/h) and peak risk (line) · Amber 0.45 / Red 0.75</text>`;
+[.45,.75].forEach((t,i)=>g+=`<line x1="0" x2="${W}" y1="${H-t*(H-20)}" y2="${H-t*(H-20)}" stroke="${i?col.red:col.amber}" stroke-dasharray="4"/>`);
+S.series.forEach((s,i)=>g+=`<rect x="${i*bw+1}" y="${H-s.rain/mr*50}" width="${bw-2}" height="${s.rain/mr*50}" fill="#1f6feb" opacity=".6"/>`);
+g+=`<polyline fill="none" stroke="#f0f6fc" stroke-width="2" points="${S.series.map((s,i)=>`${i*bw+bw/2},${H-s.peak*(H-20)}`).join(' ')}"/>`;
+g+=`<text x="0" y="${H+12}" fill="#8da2b5" font-size="10">now</text><text x="${W-30}" y="${H+12}" fill="#8da2b5" font-size="10">+24h</text></svg>`;$('chart').innerHTML=g}
+async function brief(l){try{$('brief').textContent=(await api('/briefing'+qs('lang='+l+(q()?'&'+q():'')))).text}catch(e){}}
+function setStart(a,o){start=[a,o];if(startM)map.removeLayer(startM);startM=L.circleMarker(start,{color:'#58a6ff',radius:8}).addTo(map);route();tab(0)}
+function gps(){navigator.geolocation?.getCurrentPosition(p=>setStart(p.coords.latitude,p.coords.longitude),()=>alert('Location unavailable'))}
+async function route(){try{const r=await api('/route'+qs(`lat=${start[0]}&lon=${start[1]}`+(q()?'&'+q():'')));if(routeL)map.removeLayer(routeL);routeL=L.polyline(r.path,{color:r.blocked?col.red:'#58a6ff',weight:5}).addTo(map);
+$('route').innerHTML=`<b>${esc(r.shelter.name)}</b> <span class="mu">(placeholder)</span><br>${r.distance_km} km · ~${r.walk_min} min walk<br>Highest risk on route ${Math.round(r.max_risk*100)}% · underpasses ${r.underpasses}${r.blocked?'<br><b style="color:#f85149">Route passes a flooded/blocked zone</b>':''}<div class="mu">Engine: ${esc(r.engine)}</div>`}catch(e){$('route').textContent=e.message}}
+const rc=r=>`<div class="card"><span class="st ${r.status}">${r.status}</span> ${r.scenario?'<span class="st Unverified">scenario</span>':''} <b>${esc(r.place)}</b> ${r.merged?'<span class="mu">(merged duplicate)</span>':''}<br>${esc(r.text)}<div class="mu">flood ${Math.round(r.flood_prob*100)}% · ${esc(r.severity)} · needs: ${esc(r.needs.join(', ')||'–')} · lang ${r.lang} · score ${r.score} · dups ${r.dups}</div></div>`;
+async function reps(){try{$('reps').innerHTML=(await api('/reports?scenario='+(S?.mode=='scenario'))).map(rc).join('')||'<div class="mu">No reports yet.</div>'}catch(e){}}
+async function sendRep(){const t=$('rtxt').value;if(!t)return;const b={text:t,scenario:S.mode=='scenario',rain:scn.rain,river:scn.river};if(start)b.lat=start[0],b.lon=start[1];try{await api('/reports',{method:'POST',body:JSON.stringify(b)});$('rtxt').value='';refresh()}catch(e){alert(e.message)}}
+async function sampleRep(){try{await api('/reports/sample',{method:'POST',body:JSON.stringify({rain:scn.rain,river:scn.river,scen:S.mode=='scenario'})});refresh()}catch(e){alert(e.message)}}
+async function dispatch(){try{const r=await api('/dispatch',{method:'POST',body:JSON.stringify({rain:scn.rain,river:scn.river,scen:S.mode=='scenario'})});$('disp').innerHTML=r.map(x=>`<div class="card"><b>${esc(x.unit)}</b> → ${esc(x.target)}<div class="mu">${x.kind} · ETA ${x.eta_min} min</div></div>`).join('')||'<div class="mu">No targets (risk below Amber).</div>'}catch(e){$('disp').textContent=e.message}}
+async function sendAlert(){try{const r=await api('/alerts/send',{method:'POST'});alert(`Level ${r.level}: ${r.recipients??0} recipient(s), ${r.mode}`);alerts()}catch(e){alert(e.message)}}
+async function resetRep(){try{await api('/reports',{method:'DELETE'});refresh()}catch(e){alert(e.message)}}
+async function alerts(){try{$('alerts').innerHTML=(await api('/alerts')).map(a=>`<div class="card"><span class="st ${a.level=='RED'?'Rejected':'Probable'}">${a.level}</span> ${a.recipients} recipients · ${a.mode}<div class="mu">${new Date(a.at).toLocaleString()}</div></div>`).join('')||'<div class="mu">None yet.</div>'}catch(e){}}
+async function ask(){const m=$('cin').value.trim();if(!m)return;$('cin').value='';const c=$('chat');c.innerHTML+=`<div class="b me">You: ${esc(m)}</div>`;
+const b={message:m,rain:scn.rain,river:scn.river};if(start)b.lat=start[0],b.lon=start[1];try{const r=await api('/chat',{method:'POST',body:JSON.stringify(b)});c.innerHTML+=`<div class="b">JalRakshak: ${esc(r.reply)}</div>`}catch(e){c.innerHTML+=`<div class="b mu">${esc(e.message)}</div>`}c.scrollTop=1e9}
+async function loadMe(){try{ME=await api('/me');$('who').textContent='👤 '+ME.name+(ME.admin?' (admin)':'')}catch(e){ME=null;$('who').textContent=''}}
+function acct(){const a=$('acct');if(!ME){a.innerHTML=`<div class="banner">No passwords. We email you a 6-digit code.</div><div class="row"><button id="mS" class="on" onclick="mode('signup')">Sign up</button><button id="mI" onclick="mode('signin')">Sign in</button></div>
+<div id="nm"><label>Name</label><input type="text" id="an"></div><label>Email</label><input type="email" id="ae">
+<div id="cs" class="mu" style="margin-top:8px"><label style="display:flex;gap:6px;align-items:flex-start;color:inherit"><input type="checkbox" id="ac" style="width:auto"> I consent to JalRakshak storing my name, email and chosen block to send flood alerts. I can export or delete my data any time.</label></div>
+<button class="p" style="margin-top:8px" onclick="reqCode()">Email me a code</button><div id="cbox"></div>`;window._mode='signup';return}
+a.innerHTML=`<div class="card"><b>${esc(ME.name)}</b> <span class="mu">${esc(ME.email_masked)}</span></div><label>My block (alerts target this)</label><select id="pb">${(S?.blocks||[]).map(b=>`<option value="${b.id}" ${b.id==ME.block_id?'selected':''}>${esc(b.name)}</option>`).join('')}</select>
+<label>Alert language</label><select id="pl"><option value="en">English</option><option value="hi" ${ME.lang=='hi'?'selected':''}>हिन्दी</option></select>
+<label style="display:flex;gap:6px"><input type="checkbox" id="ps" style="width:auto" ${ME.subscribed?'checked':''}> Email me flood alerts</label><div class="row" style="margin-top:8px"><button class="p" onclick="saveMe()">Save</button><button onclick="exportMe()">Export my data</button><button onclick="delMe()">Delete account</button><button onclick="logout()">Sign out</button></div>`}
+function mode(m){window._mode=m;$('mS').classList.toggle('on',m=='signup');$('mI').classList.toggle('on',m=='signin');$('nm').style.display=$('cs').style.display=m=='signup'?'block':'none'}
+async function reqCode(){try{const r=await api('/auth/request',{method:'POST',body:JSON.stringify({email:$('ae').value,mode:window._mode,name:$('an')?.value,consent:$('ac')?.checked})});
+$('cbox').innerHTML=`<div class="card">${esc(r.message)}${r.dev_code?`<br><b>Demo code: ${r.dev_code}</b>`:''}</div><input type="text" id="oc" maxlength="6" placeholder="6-digit code"><button class="p" style="margin-top:6px" onclick="verify()">Verify</button>`}catch(e){alert(e.message)}}
+async function verify(){try{await api('/auth/verify',{method:'POST',body:JSON.stringify({email:$('ae').value,code:$('oc').value})});await loadMe();acct()}catch(e){alert(e.message)}}
+async function saveMe(){try{ME=await api('/me',{method:'PUT',body:JSON.stringify({block_id:$('pb').value,lang:$('pl').value,subscribed:$('ps').checked})});alert('Saved')}catch(e){alert(e.message)}}
+async function exportMe(){const j=await api('/me/export');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(j,null,2)],{type:'application/json'}));a.download='my-jalrakshak-data.json';a.click()}
+async function delMe(){if(!confirm('Permanently delete your account and data?'))return;await api('/me',{method:'DELETE'});ME=null;$('who').textContent='';acct()}
+async function logout(){await api('/auth/logout',{method:'POST'});ME=null;$('who').textContent='';acct()}
+async function about(){const m=await api('/model-card'),f=m.flood_model,n=m.nlp_models;$('about').innerHTML=`<div class="card"><b>Flood model (random forest)</b><br>Trained on real satellite flood records: ${f.rows} block-months, ${f.blocks} blocks, ${f.years?.join('–')}<br>Leave-one-year-out AUC <b>${f.loyo_auc}</b> · Brier ${f.loyo_brier} (baseline ${f.baseline_brier})<div class="mu">${esc(f.caveat)}</div></div>
+<div class="card"><b>Own NLP models</b> (no external AI API)<br>Held-out-template accuracy: flood ${n.flood_acc_heldout_templates} · severity ${n.severity_acc_heldout_templates} · intent ${n.intent_acc_heldout_templates}<div class="mu">${esc(n.note)}</div></div>
+<div class="card"><b>Privacy</b><br>No passwords. Emails stored as keyed hash + encrypted copy. One-time codes hashed, expire in 10 min, 5 tries. Report/chat text never leaves this server. Export and delete your data in Account.</div>
+<div class="card"><b>Placeholders</b><br>${m.placeholders.map(esc).join('<br>')}</div><div class="card"><b>Limitations</b><br>${m.limitations.map(esc).join('<br>')}</div>`}
+(async()=>{try{const h=await api('/health');$('pAi').textContent='AI: own models '+(h.flood_model&&h.nlp?'ready':'missing');$('pAi').className='pill '+(h.flood_model&&h.nlp?'ok':'warn');$('pMail').textContent='email: '+h.email;$('pMail').className='pill '+(h.email=='smtp'?'ok':'warn')}catch(e){}
+await loadMe();await refresh();alerts();setInterval(()=>{if(S?.mode=='live')refresh()},300000)})();
+</script></body></html>

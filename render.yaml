@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: jalrakshak
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt && python scripts/train.py && python scripts/train_nlp.py
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    healthCheckPath: /api/health
+    envVars:
+      - {key: PYTHON_VERSION, value: 3.12.3}
+      - {key: APP_SECRET, generateValue: true}
+      - {key: CRON_KEY, generateValue: true}
+      - {key: COOKIE_SECURE, value: "1"}
+      - {key: DATABASE_URL, sync: false}
+      - {key: ADMIN_EMAILS, sync: false}
+      - {key: SMTP_HOST, sync: false}
+      - {key: SMTP_USER, sync: false}
+      - {key: SMTP_PASS, sync: false}
+      - {key: MAIL_FROM, sync: false}
+      - {key: DEV_SHOW_OTP, value: "0"}

@@ -1,0 +1,8 @@
+id,type,name,lat,lon,speed_kmh,placeholder
+U1,boat,Rescue Boat 1 (placeholder),25.244,86.972,12,1
+U2,boat,Rescue Boat 2 (placeholder),25.390,87.100,12,1
+U3,pump,Pump Unit 1 (placeholder),25.235,86.965,25,1
+U4,pump,Pump Unit 2 (placeholder),25.267,87.234,25,1
+U5,ambulance,Ambulance 1 (placeholder),25.244,86.972,40,1
+U6,ndrf,SDRF/NDRF Team (placeholder),25.244,86.972,35,1
+U7,boat,Rescue Boat 3 (placeholder),25.246,86.738,12,1
